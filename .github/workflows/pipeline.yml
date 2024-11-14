@@ -1,10 +1,9 @@
-name: ServiceNow GitHub Actions Demo
+name: ServiceNow GitHub Actions Deploy Test
 
 on:
-  pull_request:
   push:
     branches:
-      - main
+      '*'
 
 jobs:
   build:
@@ -14,7 +13,7 @@ jobs:
     name: Publish from Dev
     runs-on: ubuntu-latest
     # Below line can be used to set conditionals for modifying your pipeline as needed.
-    # if: ${{ github.event_name == 'pull_request'}}
+    if: ${{ github.event_name == 'push' && (github.base_ref == 'test') }}
 
     steps:
 
@@ -47,16 +46,17 @@ jobs:
     outputs:
       publishversion: ${{ steps.publish_app.outputs.newVersion }}
 
-  test:
+  deploytest:
     # Purpose of this job is to Install App from the app repo for the version 
     # published in the build job to a Test instance, then run an ATF Test Suite 
     # associated with the app. If Test Suite fails, the app should be Rolled Back 
     # to clean up the persistent Test environment. 
     needs: build
-    name: Run ATF in Test
+    name: Publish APP in test and Run ATF in Test
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' && github.base_ref == 'test'}}
     # Below line can be used to set conditionals for modifying your pipeline as needed.
-    # if: ${{ github.event_name == 'pull_request'}}
+    #if: ${{ github.event_name == 'push' && (github.base_ref == 'test' || github.base_ref == 'main') }}
     
     steps:
 
@@ -104,32 +104,3 @@ jobs:
     # what to install.
     outputs:
       publishversion: ${{ needs.build.outputs.publishversion }}
-
-  deployprod:
-    # Purpose of this job is to Install App to a Prod instance. This should only 
-    # trigger if the feature branch has been merged to master after a successfully 
-    # completed pull request, hence the conditional for push to master. In other words,
-    # the first two jobs run on CI, then all three jobs run on CD. 
-    needs: test
-    name: Deploy to Prod
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    steps:
-    
-      - name: ServiceNow CI/CD Install App
-        id: install_app_prod
-        uses: ServiceNow/sncicd-install-app@2.0.0
-        with:
-          version: ${{ needs.test.outputs.publishversion }}
-          # Only applicable if Application Customization is active. 
-          # Version of the base application on which to apply the customizations
-#          baseAppVersion: '1.2.3'
-          # Only applicable if Application Customization is active and the associated 
-          # application is a higher version than the currently installed version
-          # Default: false
-#          autoUpgradeBaseApp: true
-        env:
-          nowUsername: ${{ secrets.SN_USERNAME }}
-          nowPassword: ${{ secrets.SN_PASSWORD }}
-          nowInstallInstance: ${{ secrets.SN_PROD_INSTANCE }}
-          appSysID: ${{ secrets.SN_APP_SYSID }}
